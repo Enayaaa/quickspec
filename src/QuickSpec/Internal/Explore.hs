@@ -65,8 +65,8 @@ quickSpec ::
   MonadPruner (Term fun) norm m, MonadTester testcase (Term fun) m, MonadTerminal m) =>
   (Prop (Term fun) -> m ()) ->
   (Term fun -> testcase -> Maybe result) ->
-  Int -> Int -> (Type -> VariableUse) -> Universe -> Enumerator (Term fun) -> m ()
-quickSpec present eval maxSize maxCommutativeSize use univ enum = do
+  Int -> Int -> Bool -> (Type -> VariableUse) -> Universe -> Enumerator (Term fun) -> m ()
+quickSpec present eval maxSize maxCommutativeSize debugExplore use univ enum = do
   let
     state0 = initialState use univ (\t -> size t <= maxCommutativeSize) eval
 
@@ -78,7 +78,7 @@ quickSpec present eval maxSize maxCommutativeSize use univ enum = do
         total = length ts
         consider (i, t) = do
           putStatus (printf "testing terms of size %d: %d/%d" m i total)
-          res <- explore t
+          res <- explore debugExplore t
           putStatus (printf "testing terms of size %d: %d/%d" m i total)
           lift $ mapM_ present (result_props res)
           case res of
