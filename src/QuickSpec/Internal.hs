@@ -432,6 +432,10 @@ withConsistencyCheck = Sig (\_ -> setL (Haskell.lens_check_consistency) True)
 withResourceLimitHandling :: Sig
 withResourceLimitHandling = Sig (\_ -> setL (Haskell.lens_handle_resource_limit) True)
 
+-- | (Experimental) Enable debug prints while exploring terms
+withDebugExplore :: Sig
+withDebugExplore = Sig (\_ -> setL (Haskell.lens_debug_explore) True)
+
 -- | A signature containing boolean functions:
 -- @(`||`)@, @(`&&`)@, `not`, `True`, `False`.
 bools :: Sig

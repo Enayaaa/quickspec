@@ -52,7 +52,7 @@ instance PrettyTerm fun => PrettyTerm (PolyFun fun) where
   termStyle = termStyle . fun_specialised
 
 -- The set of all types being explored
-data Universe = Universe { univ_types :: Set Type }
+newtype Universe = Universe { univ_types :: Set Type }
 
 schemas = lens pm_schemas (\x y -> y { pm_schemas = x })
 univ = lens pm_universe (\x y -> y { pm_universe = x })
@@ -85,33 +85,35 @@ newtype PolyM testcase result fun norm m a = PolyM { unPolyM :: StateT (Polymorp
 explore ::
   (PrettyTerm fun, Ord result, Ord norm, Typed fun, Ord fun, Apply (Term fun),
   MonadTester testcase (Term fun) m, MonadPruner (Term fun) norm m, MonadTerminal m) =>
+  Bool ->
   Term fun ->
   StateT (Polymorphic testcase result fun norm) m (Result fun)
-explore t = do
+explore debugExplore t = do
   univ <- access univ
   unless (t `usefulForUniverse` univ) $
     error ("Type " ++ prettyShow (typ t) ++ " not in universe for " ++ prettyShow t)
   if not (t `inUniverse` univ) then
     return (Accepted [])
    else do
-    res <- exploreNoMGU t
+    res <- exploreNoMGU debugExplore t
     case res of
       Rejected{} -> return res
       Accepted{} -> do
         ress <- forM (typeInstances univ t) $ \u ->
-          exploreNoMGU u
+          exploreNoMGU debugExplore u
         return res { result_props = concatMap result_props (res:ress) }
 
 exploreNoMGU ::
   (PrettyTerm fun, Ord result, Ord norm, Typed fun, Ord fun, Apply (Term fun),
   MonadTester testcase (Term fun) m, MonadPruner (Term fun) norm m, MonadTerminal m) =>
+  Bool ->
   Term fun ->
   StateT (Polymorphic testcase result fun norm) m (Result fun)
-exploreNoMGU t = do
+exploreNoMGU debugExplore t = do
   univ <- access univ
   if not (t `inUniverse` univ) then return (Rejected []) else do
     schemas1 <- access schemas
-    (res, schemas2) <- unPolyM (runStateT (Schemas.explore (polyTerm t)) schemas1)
+    (res, schemas2) <- unPolyM (runStateT (Schemas.explore debugExplore (polyTerm t)) schemas1)
     schemas ~= schemas2
     return (mapProps (regeneralise . mapFun fun_original) res)
   where
