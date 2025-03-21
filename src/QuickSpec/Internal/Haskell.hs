@@ -162,7 +162,7 @@ data OrdInstance a where
 -- A token used in the instance list for types that shouldn't generate warnings
 data NoWarnings a = NoWarnings
 
-data Use a = Use VariableUse
+newtype Use a = Use VariableUse
 
 instance c => Arbitrary (Dict c) where
   arbitrary = return Dict
@@ -637,7 +637,8 @@ data Config =
     cfg_print_filter :: Prop (Term Constant) -> Bool,
     cfg_print_style :: PrintStyle,
     cfg_check_consistency :: Bool,
-    cfg_handle_resource_limit :: Bool
+    cfg_handle_resource_limit :: Bool,
+    cfg_debug_explore :: Bool
     }
 
 lens_quickCheck = lens cfg_quickCheck (\x y -> y { cfg_quickCheck = x })
@@ -656,6 +657,7 @@ lens_print_filter = lens cfg_print_filter (\x y -> y { cfg_print_filter = x })
 lens_print_style = lens cfg_print_style (\x y -> y { cfg_print_style = x })
 lens_check_consistency = lens cfg_check_consistency (\x y -> y { cfg_check_consistency = x })
 lens_handle_resource_limit = lens cfg_handle_resource_limit (\x y -> y { cfg_handle_resource_limit = x })
+lens_debug_explore = lens cfg_debug_explore (\x y -> y { cfg_debug_explore = x })
 
 defaultConfig :: Config
 defaultConfig =
@@ -675,7 +677,8 @@ defaultConfig =
     cfg_print_filter = \_ -> True,
     cfg_print_style = ForHumans,
     cfg_check_consistency = False,
-    cfg_handle_resource_limit = False }
+    cfg_handle_resource_limit = False,
+    cfg_debug_explore = False }
 
 -- Extra types for the universe that come from in-scope instances.
 instanceTypes :: Instances -> Config -> [Type]
@@ -839,7 +842,7 @@ quickSpec cfg@Config{..} = do
         pres prop = do
           liftIO $ modifyIORef props (prop:)
           if n == 0 then return () else present (constantsOf f) prop
-      QuickSpec.Internal.Explore.quickSpec pres (flip eval) cfg_max_size cfg_max_commutative_size use univ
+      QuickSpec.Internal.Explore.quickSpec pres (flip eval) cfg_max_size cfg_max_commutative_size cfg_debug_explore use univ
         (enumerator (map Fun (constantsOf g)))
       when (n > 0) $ do
         when (cfg_print_style == ForQuickCheck) $ putLine "  ]"

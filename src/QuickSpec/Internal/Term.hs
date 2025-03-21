@@ -98,8 +98,8 @@ instance Sized f => Sized (Term f) where
       _ -> 0
 
 instance Pretty Var where
-  pPrint x = parens $ text "X" <#> pPrint (var_id x+1) <+> text "::" <+> pPrint (var_ty x)
-  --pPrint x = text "X" <#> pPrint (var_id x+1)
+  -- pPrint x = parens $ text "X" <#> pPrint (var_id x+1) <+> text "::" <+> pPrint (var_ty x)
+  pPrint x = text "X" <#> pPrint (var_id x+1)
 
 instance PrettyTerm f => Pretty (Term f) where
   pPrintPrec l p (Var x :@: ts) =

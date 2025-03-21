@@ -70,37 +70,37 @@ data Result fun =
 explore ::
   (PrettyTerm fun, Ord result, Ord fun, Ord norm, Typed fun,
   MonadTester testcase (Term fun) m, MonadPruner (Term fun) norm m, MonadTerminal m) =>
-  Term fun -> StateT (Schemas testcase result fun norm) m (Result fun)
-explore t0 = do
+  Bool -> Term fun -> StateT (Schemas testcase result fun norm) m (Result fun)
+explore debugExplore t0 = do
   use <- access use
   if or [use ty == UpTo 0 | ty <- usort (map typ (vars t0))] then return (Rejected []) else do
     let t = mostSpecific t0
-    res <- zoom classes (Terms.explore t)
+    res <- zoom classes (Terms.explore debugExplore t)
     case res of
       Terms.Singleton -> do
         inst <- gets sc_instantiate_singleton
         if inst t then
-          instantiateRep t
+          instantiateRep debugExplore t
          else do
           -- Add the most general instance of the schema
-          zoom (instance_ t) (Terms.explore (mostGeneral use t0))
+          zoom (instance_ t) (Terms.explore debugExplore (mostGeneral use t0))
           return (Accepted [])
       Terms.Discovered ([] :=>: _ :=: u) ->
-        exploreIn u t
+        exploreIn debugExplore u t
       Terms.Knew ([] :=>: _ :=: u) ->
-        exploreIn u t
+        exploreIn debugExplore u t
       _ -> error "term layer returned non-equational property"
 
 {-# INLINEABLE exploreIn #-}
 exploreIn ::
   (PrettyTerm fun, Ord result, Ord fun, Ord norm, Typed fun,
   MonadTester testcase (Term fun) m, MonadPruner (Term fun) norm m, MonadTerminal m) =>
-  Term fun -> Term fun ->
+  Bool -> Term fun -> Term fun ->
   StateT (Schemas testcase result fun norm) m (Result fun)
-exploreIn rep t = do
+exploreIn debugExplore rep t = do
   -- First check if schema is redundant
   use <- access use
-  res <- zoom (instance_ rep) (Terms.explore (mostGeneral use t))
+  res <- zoom (instance_ rep) (Terms.explore debugExplore (mostGeneral use t))
   case res of
     Terms.Discovered prop -> do
       add prop
@@ -112,33 +112,34 @@ exploreIn rep t = do
       inst <- access instantiated
       props <-
         if Set.notMember rep inst
-        then result_props <$> instantiateRep rep
+        then result_props <$> instantiateRep debugExplore rep
         else return []
-      res <- instantiate rep t
+      res <- instantiate debugExplore rep t
       return res { result_props = props ++ result_props res }
 
 {-# INLINEABLE instantiateRep #-}
 instantiateRep ::
   (PrettyTerm fun, Ord result, Ord fun, Ord norm, Typed fun,
   MonadTester testcase (Term fun) m, MonadPruner (Term fun) norm m, MonadTerminal m) =>
+  Bool ->
   Term fun ->
   StateT (Schemas testcase result fun norm) m (Result fun)
-instantiateRep t = do
+instantiateRep debugExplore t = do
   instantiated %= Set.insert t
-  instantiate t t
+  instantiate debugExplore t t
 
 {-# INLINEABLE instantiate #-}
 instantiate ::
   (PrettyTerm fun, Ord result, Ord fun, Ord norm, Typed fun,
   MonadTester testcase (Term fun) m, MonadPruner (Term fun) norm m, MonadTerminal m) =>
-  Term fun -> Term fun ->
+  Bool -> Term fun -> Term fun ->
   StateT (Schemas testcase result fun norm) m (Result fun)
-instantiate rep t = do
+instantiate debugExplore rep t = do
   use <- access use
   zoom (instance_ rep) $ do
     let instances = sortBy (comparing generality) (allUnifications use (mostGeneral use t))
     Accepted <$> catMaybes <$> forM instances (\t -> do
-      res <- Terms.explore t
+      res <- Terms.explore debugExplore t
       case res of
         Terms.Discovered prop -> do
           res <- add prop
