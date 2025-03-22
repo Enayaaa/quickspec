@@ -308,6 +308,10 @@ withPrintFilter :: (Prop (Term Haskell.Constant) -> Bool) -> Sig
 withPrintFilter p =
   Sig (\_ -> setL Haskell.lens_print_filter p)
 
+withEnumeratorFilter :: (Term Haskell.Constant -> Bool) -> Sig
+withEnumeratorFilter p =
+  Sig (\_ -> setL Haskell.lens_enumerator_filter p)
+
 -- | Declare some functions as being background functions.
 -- These are functions which are not interesting on their own,
 -- but which may appear in interesting laws with non-background functions.
