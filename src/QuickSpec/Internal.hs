@@ -440,6 +440,10 @@ withResourceLimitHandling = Sig (\_ -> setL (Haskell.lens_handle_resource_limit)
 withDebugExplore :: Sig
 withDebugExplore = Sig (\_ -> setL (Haskell.lens_debug_explore) True)
 
+-- | (Experimental) Enable debug print of pruner theorems before starting term enumeration.
+withDebugPrunerBackground :: Sig
+withDebugPrunerBackground = Sig (\_ -> setL (Haskell.lens_debug_pruner_background) True)
+
 -- | A signature containing boolean functions:
 -- @(`||`)@, @(`&&`)@, `not`, `True`, `False`.
 bools :: Sig
