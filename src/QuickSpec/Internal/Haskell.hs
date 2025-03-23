@@ -642,7 +642,8 @@ data Config =
     cfg_print_style :: PrintStyle,
     cfg_check_consistency :: Bool,
     cfg_handle_resource_limit :: Bool,
-    cfg_debug_explore :: Bool
+    cfg_debug_explore :: Bool,
+    cfg_debug_pruner_background :: Bool
     }
 
 lens_quickCheck = lens cfg_quickCheck (\x y -> y { cfg_quickCheck = x })
@@ -663,6 +664,7 @@ lens_print_style = lens cfg_print_style (\x y -> y { cfg_print_style = x })
 lens_check_consistency = lens cfg_check_consistency (\x y -> y { cfg_check_consistency = x })
 lens_handle_resource_limit = lens cfg_handle_resource_limit (\x y -> y { cfg_handle_resource_limit = x })
 lens_debug_explore = lens cfg_debug_explore (\x y -> y { cfg_debug_explore = x })
+lens_debug_pruner_background = lens cfg_debug_pruner_background (\x y -> y { cfg_debug_pruner_background = x })
 
 defaultConfig :: Config
 defaultConfig =
@@ -684,7 +686,9 @@ defaultConfig =
     cfg_print_style = ForHumans,
     cfg_check_consistency = False,
     cfg_handle_resource_limit = False,
-    cfg_debug_explore = False }
+    cfg_debug_explore = False,
+    cfg_debug_pruner_background = False
+    }
 
 -- Extra types for the universe that come from in-scope instances.
 instanceTypes :: Instances -> Config -> [Type]
@@ -839,6 +843,20 @@ quickSpec cfg@Config{..} = do
         putLine $ show $ pPrintSignature
           (map (Fun . unhideConstraint) (f cfg_constants))
         putLine ""
+
+      thms <- theorems (const Nothing)
+      unless (null (f cfg_constants) || not cfg_debug_pruner_background) $ do
+          putLine "== Background laws =="
+          let present' :: Int -> [Constant] -> Prop (Term Constant)
+                  -> Conditionals (Twee.Pruner Constant (QuickCheck.Tester TestCase (Term Constant) (Value Ordy) Terminal)) ()
+              present' i funs prop = do
+                  norm <- normaliser
+                  putLine $ printf "%3d. %s" i $ show $
+                      prettiestProp funs norm prop <+> disambiguatePropType prop
+          forM_ (zip [1..] thms) $ \(i,x) -> do
+            present' i constants (prop x)
+          putLine ""
+
       when (n > 0) $ do
         putText (prettyShow (warnings univ instances cfg))
         putLine "== Laws =="
