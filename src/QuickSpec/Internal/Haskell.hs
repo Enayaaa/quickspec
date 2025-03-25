@@ -848,10 +848,23 @@ quickSpec cfg@Config{..} = do
                   -> Conditionals (Twee.Pruner (WithConstructor Constant) (QuickCheck.Tester TestCase (Term Constant) (Value Ordy) Terminal)) ()
               present' i funs prop = do
                   norm <- normaliser
-                  putLine $ printf "%3d. %s" i $ show $
-                      prettiestProp funs norm prop <+> disambiguatePropType prop
+                  unless (isTrivial prop) $ do
+                      putLine $ printf "%3d. %s" i $ show $
+                          prettiestProp funs norm prop <+> disambiguatePropType prop
+              isTrivial (_ :=>: t :=: u) = t == u
           forM_ (zip [1..] thms) $ \(i,x) -> do
-            present' i constants (prop x)
+            let prop' = prop x
+            present' i constants prop'
+            forM_ (zip [1..] $ axiomsUsed x) $ \(i, (a,as)) -> do
+              unless (isTrivial a) $ putText "\t";
+              present' i constants a
+              forM_ (zip [1..] as) $ \(j, a) -> do
+                  unless (isTrivial a) $ putText "\t\t";
+                  present' j constants a
+            case prop' of
+                [] :=>: Fun f :=: Fun g | usort (map con_name [f,g]) == ["False","True"] ->
+                    error "Background law is trivially False"
+                _ -> return ()
           putLine ""
 
       when (n > 0) $ do
