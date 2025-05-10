@@ -10,44 +10,45 @@ import QuickSpec.Internal.Term
 import QuickSpec.Internal.Type
 import QuickSpec.Internal.Prop hiding (mapFun)
 import QuickSpec.Internal.Terminal
+import QuickSpec.Internal.Utils
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 
 data Conditionals fun =
     Func fun
-  | IfEq Type Type
+  | Guard Type (UnconditionalTerm fun) (UnconditionalTerm fun) (UnconditionalTerm fun) (UnconditionalTerm fun) [Var]
   deriving (Eq, Ord, Show, Typeable)
 
 instance Arity fun => Arity (Conditionals fun) where
   arity (Func f) = arity f
-  arity (IfEq _ _) = 4
+  arity (Guard _ _ _ _ _ vs) = length vs + 1
 
 instance Sized fun => Sized (Conditionals fun) where
   size (Func f) = size f
-  size (IfEq _ _) = 0
+  size Guard{} = 0
 
 instance Sized fun => FuncSized (Conditionals fun) where
   -- Note: since there is no FuncSized instance for PartiallyApplied
   -- we just assume that Func f is adding the size of its arguments
   sizeApp (Func f) ts = size f + sum ts
-  sizeApp (IfEq _ _) [t, u, v, w] = maximum [t+penalty, u+penalty, v, w]
+  sizeApp Guard{} ts = penalty + maximum ts
     where
       penalty = 3
 
 instance Pretty fun => Pretty (Conditionals fun) where
   pPrint (Func f) = pPrint f
-  pPrint (IfEq _ _) = text "ifeq"
+  pPrint Guard{} = text "guard"
 
 instance PrettyTerm fun => PrettyTerm (Conditionals fun) where
   termStyle (Func f) = termStyle f
-  termStyle (IfEq _ _) = uncurried
+  termStyle Guard{} = uncurried
 
 instance Typed fun => Typed (Conditionals fun) where
   typ (Func f) = typ f
-  typ (IfEq ty1 ty2) = arrowType [ty1, ty1, ty2, ty2] ty2
+  typ (Guard ty t _ _ _ vs) = arrowType (typ t:map typ vs) ty
 
   typeSubst_ sub (Func f) = Func (typeSubst_ sub f)
-  typeSubst_ sub (IfEq ty1 ty2) = IfEq (typeSubst_ sub ty1) (typeSubst_ sub ty2)
+  typeSubst_ sub (Guard ty t u v w vs) = Guard (typeSubst_ sub ty) (typeSubst_ sub t) (typeSubst_ sub u) (typeSubst_ sub v) (typeSubst_ sub w) (typeSubst_ sub vs)
 
 instance EqualsBonus (Conditionals fun) where
 
@@ -69,30 +70,27 @@ instance (PrettyTerm fun, Typed fun, MonadPruner (UnconditionalTerm fun) norm pr
       return $ \t ->
         norm . mapFun Func $ t
 
-  add prop = lift (add (conditionalise (canonicalise prop)))
+  add prop = and <$> lift (mapM add (conditionalise' (canonicalise prop)))
 
   decodeNormalForm hole t =
     Pruner $ do
       t <- decodeNormalForm (fmap (fmap Func) . hole) t
       let elimIfEq (Func f) = Just f
-          elimIfEq (IfEq _ _) = Nothing
+          elimIfEq Guard{} = Nothing
       return $ t >>= mapFunM elimIfEq
 
 instance (Typed fun, Arity fun, Background fun) => Background (Conditionals fun) where
-  background (Func f) =
-    map conditionalise (background f)
-  background f@(IfEq ty1 ty2) =
-    [ Fun f :@: [x, x, y, z] === y ]
-    where
-      x = Var (V ty1 0)
-      y = Var (V ty2 1)
-      z = Var (V ty2 2)
+  background (Func f) = concatMap conditionalise' (background f)
+  background Guard{} = []
 
-conditionalise :: Typed fun => Prop (ConditionalTerm fun) -> Prop (UnconditionalTerm fun)
-conditionalise prop@([] :=>: _) = mapTerm (mapFun Func) prop
-conditionalise ((t :=: u):lhs :=>: rhs) =
-  Fun (IfEq ty1 ty2) :@: [mapFun Func t, mapFun Func u, v, w] === w
+conditionalise :: Typed fun => Prop (UnconditionalTerm fun) -> [Prop (UnconditionalTerm fun)]
+conditionalise prop@([] :=>: _) = [prop]
+conditionalise ((t :=: u):lhs :=>: v :=: w) =
+  ([] :=>: guarded t v):conditionalise (lhs :=>: guarded u w)
   where
-    [] :=>: v :=: w = conditionalise (lhs :=>: rhs)
-    ty1 = typ t
-    ty2 = typ v
+    guarded x y = Fun (Guard ty t u v w vs) :@: (x:map Var vs) :=: y
+    vs = usort (concatMap vars [t, u, v, w])
+    ty = typ t
+
+conditionalise' :: Typed fun => Prop (ConditionalTerm fun) -> [Prop (UnconditionalTerm fun)]
+conditionalise' = conditionalise . mapTerm (mapFun Func)
