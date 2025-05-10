@@ -44,8 +44,12 @@ instance (Ord fun, Typeable fun) => Labelled (Extended fun)
 instance Sized fun => Sized (Extended fun) where
   size (Function f) = size f
   size _ = 1
-  sizeMode (Function f) = sizeMode f
-  sizeMode _ = AddArgs
+  --sizeMode (Function f) = sizeMode f
+  --sizeMode _ = AddArgs
+
+instance FuncSized fun => FuncSized (Extended fun) where
+  sizeApp (Function f) ts = sizeApp f ts
+  sizeApp _ [] = 1
 
 instance KBO.Sized (Extended fun) where
   size _ = 1
@@ -64,7 +68,7 @@ instance (Ord fun, Typeable fun, PrettyTerm fun) => PrettyTerm (Extended fun) wh
   termStyle (Function f) = termStyle f
   termStyle _ = curried
 
-instance (Sized fun, Pretty fun, PrettyTerm fun, Ord fun, Typeable fun) => Ordered (Extended fun) where
+instance (Pretty fun, PrettyTerm fun, Ord fun, Typeable fun) => Ordered (Extended fun) where
   lessEq = KBO.lessEq
   lessIn = KBO.lessIn
   lessEqSkolem = KBO.lessEqSkolem
@@ -76,7 +80,7 @@ newtype Pruner fun m a =
 instance MonadTrans (Pruner fun) where
   lift = Pruner . lift . lift
 
-run :: (Typeable fun, Ord fun, PrettyTerm fun, Sized fun, Monad m) => Config -> Pruner fun m a -> m a
+run :: (Typeable fun, Ord fun, PrettyTerm fun, FuncSized fun, Monad m) => Config -> Pruner fun m a -> m a
 run Config{..} (Pruner x) =
   evalStateT (runReaderT x config) (initialState config)
   where
@@ -85,12 +89,10 @@ run Config{..} (Pruner x) =
         Twee.cfg_accept_term = Just (\t -> termSize t <= cfg_max_term_size),
         Twee.cfg_max_cp_depth = cfg_max_cp_depth }
 
-termSize :: (Labelled fun, Sized fun) => Twee.Term fun -> Int
+termSize :: (Labelled fun, FuncSized fun) => Twee.Term fun -> Int
 termSize (Twee.Var _) = 1
 termSize (Twee.App f ts) =
-  case sizeMode (Twee.fun_value f) of
-    AddArgs -> size (Twee.fun_value f) + sum (map termSize (Twee.unpack ts))
-    MaxArgs -> size (Twee.fun_value f) + maximum (0:map termSize (Twee.unpack ts))
+  sizeApp (Twee.fun_value f) (map termSize (Twee.unpack ts))
 
 instance KBO.Weighted (Extended fun) where
   argWeight _ = 1

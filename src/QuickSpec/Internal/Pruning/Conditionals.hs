@@ -25,8 +25,14 @@ instance Arity fun => Arity (Conditionals fun) where
 instance Sized fun => Sized (Conditionals fun) where
   size (Func f) = size f
   size (IfEq _ _) = 0
-  sizeMode (Func f) = sizeMode f
-  sizeMode (IfEq _ _) = MaxArgs
+
+instance Sized fun => FuncSized (Conditionals fun) where
+  -- Note: since there is no FuncSized instance for PartiallyApplied
+  -- we just assume that Func f is adding the size of its arguments
+  sizeApp (Func f) ts = size f + sum ts
+  sizeApp (IfEq _ _) [t, u, v, w] = maximum [t+penalty, u+penalty, v, w]
+    where
+      penalty = 3
 
 instance Pretty fun => Pretty (Conditionals fun) where
   pPrint (Func f) = pPrint f

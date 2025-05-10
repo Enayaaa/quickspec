@@ -25,8 +25,10 @@ instance Arity fun => Arity (Tagged fun) where
 instance Sized fun => Sized (Tagged fun) where
   size (Func f) = size f
   size (Tag _) = 0
-  sizeMode (Func f) = sizeMode f
-  sizeMode (Tag _) = AddArgs
+
+instance FuncSized fun => FuncSized (Tagged fun) where
+  sizeApp (Func f) ts = sizeApp f ts
+  sizeApp (Tag t) ts = sum ts
 
 instance Pretty fun => Pretty (Tagged fun) where
   pPrint (Func f) = pPrint f

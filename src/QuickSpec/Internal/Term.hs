@@ -85,22 +85,17 @@ instance Symbolic f a => Symbolic f [a] where
 
 class Sized a where
   size :: a -> Int
-  sizeMode :: a -> SizeMode
 
-data SizeMode = AddArgs | MaxArgs
+class FuncSized a where
+  sizeApp :: a -> [Int] -> Int
 
-instance Sized f => Sized (Term f) where
+instance FuncSized f => Sized (Term f) where
   size (Var _) = 1
   size (Var _ :@: ts) =
     -- Penalise applied function variables, because they can be used
     -- to build many many terms without any constants at all
     2 + sum (map size ts)
-  size (Fun f :@: ts) =
-    case sizeMode f of
-      AddArgs -> size f + sum (map size ts)
-      MaxArgs -> size f + maximum (0:map size ts)
-  sizeMode (Var _ :@: _) = AddArgs
-  sizeMode (Fun f :@: _) = sizeMode f
+  size (Fun f :@: ts) = sizeApp f (map size ts)
 
 instance Pretty Var where
   pPrint x = parens $ text "X" <#> pPrint (var_id x+1) <+> text "::" <+> pPrint (var_ty x)
@@ -261,7 +256,7 @@ depth (t :$: u) = depth t `max` (1+depth u)
 -- if measure (schema t) < measure (schema u) then t < u.
 type Measure f = (Int, Int, Int, Int, MeasureFuns f, Int, [Var])
 -- | Compute the term ordering for a term.
-measure :: (Sized f, Typed f) => Term f -> Measure f
+measure :: (FuncSized f, Typed f) => Term f -> Measure f
 measure t =
   (depth t, size t, missing t, -length (vars t), MeasureFuns (skel t),
    -length (usort (vars t)), vars t)
@@ -306,8 +301,10 @@ data a :+: b = Inl a | Inr b deriving (Eq, Ord)
 instance (Sized fun1, Sized fun2) => Sized (fun1 :+: fun2) where
   size (Inl x) = size x
   size (Inr x) = size x
-  sizeMode (Inl x) = sizeMode x
-  sizeMode (Inr x) = sizeMode x
+
+instance (FuncSized fun1, FuncSized fun2) => FuncSized (fun1 :+: fun2) where
+  sizeApp (Inl x) = sizeApp x
+  sizeApp (Inr x) = sizeApp x
 
 instance (Typed fun1, Typed fun2) => Typed (fun1 :+: fun2) where
   typ (Inl x) = typ x
